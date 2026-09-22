@@ -344,50 +344,148 @@ function createTrees() {
 function updatePlayer(dt) {
     if (!state.localPlayer) return;
 
-    const forward = Number(state.keys.KeyW) - Number(state.keys.KeyS);
-    const strafe = Number(state.keys.KeyD) - Number(state.keys.KeyA);
-    const len = Math.hypot(forward, strafe) || 1;
+    const forward =
+        Number(state.keys.KeyW) -
+        Number(state.keys.KeyS);
+
+    const strafe =
+        Number(state.keys.KeyD) -
+        Number(state.keys.KeyA);
+
+    const length =
+        Math.hypot(forward, strafe) || 1;
 
     if (forward || strafe) {
+
         const speed = 7;
-        const angle = state.yaw;
+
+        /*
+         * Направление относительно yaw камеры.
+         */
+
+        const moveForward =
+            forward / length;
+
+        const moveStrafe =
+            strafe / length;
+
+        const sin = Math.sin(state.yaw);
+        const cos = Math.cos(state.yaw);
 
         const dx =
-            (strafe / len) * Math.cos(angle) +
-            (forward / len) * Math.sin(angle);
+            moveForward * sin +
+            moveStrafe * cos;
 
         const dz =
-            (strafe / len) * -Math.sin(angle) +
-            (forward / len) * Math.cos(angle);
+            moveForward * cos -
+            moveStrafe * sin;
 
-        state.localPlayer.position.x += dx * speed * dt;
-        state.localPlayer.position.z += dz * speed * dt;
-        state.localPlayer.rotation.y = angle;
+        state.localPlayer.position.x +=
+            dx * speed * dt;
+
+        state.localPlayer.position.z +=
+            dz * speed * dt;
+
+        /*
+         * Поворачиваем персонажа
+         * в сторону движения.
+         */
+
+        state.localPlayer.rotation.y =
+            Math.atan2(dx, dz);
     }
 
-    state.velocityY -= 18 * dt;
-    state.localPlayer.position.y += state.velocityY * dt;
 
-    if (state.localPlayer.position.y <= 0) {
+    /*
+     * Прыжок / гравитация
+     */
+
+    state.velocityY -=
+        18 * dt;
+
+    state.localPlayer.position.y +=
+        state.velocityY * dt;
+
+
+    /*
+     * Земля
+     */
+
+    if (
+        state.localPlayer.position.y <= 0
+    ) {
+
         state.localPlayer.position.y = 0;
+
         state.velocityY = 0;
+
         state.grounded = true;
     }
 
-    state.localPlayer.position.x = Math.max(-190, Math.min(190, state.localPlayer.position.x));
-    state.localPlayer.position.z = Math.max(-190, Math.min(190, state.localPlayer.position.z));
+
+    /*
+     * Границы карты.
+     * Персонаж физически не может
+     * выйти за пределы мира.
+     */
+
+    const WORLD_LIMIT = 190;
+
+    state.localPlayer.position.x =
+        Math.max(
+            -WORLD_LIMIT,
+            Math.min(
+                WORLD_LIMIT,
+                state.localPlayer.position.x
+            )
+        );
+
+    state.localPlayer.position.z =
+        Math.max(
+            -WORLD_LIMIT,
+            Math.min(
+                WORLD_LIMIT,
+                state.localPlayer.position.z
+            )
+        );
+
+
+    /*
+     * Отправляем положение серверу
+     */
 
     const now = performance.now();
-    if (now - state.lastSent > 50) {
+
+    if (
+        now - state.lastSent > 50
+    ) {
+
         send({
+
             type: "move",
+
             position: {
-                x: state.localPlayer.position.x,
-                y: state.localPlayer.position.y,
-                z: state.localPlayer.position.z
+
+                x: Number(
+                    state.localPlayer.position.x
+                ),
+
+                y: Number(
+                    state.localPlayer.position.y
+                ),
+
+                z: Number(
+                    state.localPlayer.position.z
+                )
+
             },
-            rotation: state.localPlayer.rotation.y
+
+            rotation: Number(
+                state.localPlayer.rotation.y
+            )
+
         });
+
         state.lastSent = now;
     }
 }
