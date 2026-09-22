@@ -1,222 +1,602 @@
 import os
-import json
-import asyncio
-from datetime import datetime, timezone
-from typing import Dict
-
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pymongo import MongoClient
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+app = FastAPI()
+
+# =========================
+# MongoDB
+# =========================
+
 MONGODB_URI = os.getenv("MONGODB_URI")
 
-app = FastAPI(title="GrowWorld")
-
 mongo_client = None
+db = None
 players_collection = None
 
 if MONGODB_URI:
-    mongo_client = MongoClient(
-        MONGODB_URI,
-        serverSelectionTimeoutMS=5000
-    )
-    db = mongo_client["GrowWorld"]
-    players_collection = db["players"]
+    try:
+        mongo_client = MongoClient(
+            MONGODB_URI,
+            serverSelectionTimeoutMS=5000
+        )
 
-connections: Dict[str, WebSocket] = {}
-players: Dict[str, dict] = {}
-lock = asyncio.Lock()
+        db = mongo_client["GrowWorld"]
+        players_collection = db["players"]
 
+        print("MongoDB configured successfully")
 
-def clamp(v, lo, hi):
-    return max(lo, min(hi, v))
-
-
-def public_player(p):
-    return {
-        "id": p["id"],
-        "name": p["name"],
-        "height": p["height"],
-        "position": p["position"],
-        "rotation": p["rotation"],
-    }
+    except Exception as e:
+        print("MongoDB configuration error:", e)
 
 
-def load_player(player_id, name):
-    if players_collection is not None:
-        saved = players_collection.find_one({"_id": player_id})
-        if saved:
-            pos = saved.get("position", {})
-            return {
-                "id": player_id,
-                "name": str(saved.get("name", name))[:24] or "Player",
-                "height": float(saved.get("height", 1.0)),
-                "position": {
-                    "x": float(pos.get("x", 0)),
-                    "y": float(pos.get("y", 0)),
-                    "z": float(pos.get("z", 0)),
-                },
-                "rotation": float(saved.get("rotation", 0)),
-            }
+# =========================
+# Static
+# =========================
 
-    return {
-        "id": player_id,
-        "name": name[:24] or "Player",
-        "height": 1.0,
-        "position": {"x": 0.0, "y": 0.0, "z": 0.0},
-        "rotation": 0.0,
-    }
-
-
-def save_player(p):
-    if players_collection is None:
-        return
-
-    players_collection.update_one(
-        {"_id": p["id"]},
-        {"$set": {
-            "name": p["name"],
-            "height": p["height"],
-            "position": p["position"],
-            "rotation": p["rotation"],
-            "updatedAt": datetime.now(timezone.utc),
-        }},
-        upsert=True,
-    )
-
-
-async def send(ws, payload):
-    await ws.send_text(json.dumps(payload))
-
-
-async def broadcast(payload, exclude=None):
-    message = json.dumps(payload)
-    async with lock:
-        targets = list(connections.items())
-
-    dead = []
-    for pid, ws in targets:
-        if pid == exclude:
-            continue
-        try:
-            await ws.send_text(message)
-        except Exception:
-            dead.append(pid)
-
-    for pid in dead:
-        connections.pop(pid, None)
-        players.pop(pid, None)
+app.mount(
+    "/static",
+    StaticFiles(directory=STATIC_DIR),
+    name="static"
+)
 
 
 @app.get("/")
-async def home():
-    return FileResponse(os.path.join(BASE_DIR, "index.html"))
+async def root():
+    return FileResponse(
+        os.path.join(BASE_DIR, "index.html")
+    )
 
 
-app.mount("/static", StaticFiles(directory=BASE_DIR), name="static")
+# =========================
+# Players
+# =========================
+
+players = {}
+connected = {}
 
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    player_id = None
-    player = None
+def safe_float(value, default=0.0):
+    """
+    Безопасно превращает значение в float.
+    None, NaN и неправильные значения заменяются default.
+    """
 
     try:
-        raw = await websocket.receive_text()
-        data = json.loads(raw)
+        if value is None:
+            return default
 
-        if data.get("type") != "join":
-            await websocket.close(code=1008)
+        result = float(value)
+
+        if result != result:
+            return default
+
+        return result
+
+    except (TypeError, ValueError):
+        return default
+
+
+def load_player(player_id, name):
+
+    if players_collection is not None:
+
+        try:
+
+            saved = players_collection.find_one({
+                "_id": player_id
+            })
+
+            if saved:
+
+                return {
+                    "id": player_id,
+
+                    "name": (
+                        name
+                        or saved.get("name")
+                        or "Player"
+                    ),
+
+                    "height": max(
+                        0.01,
+                        min(
+                            safe_float(
+                                saved.get("height"),
+                                1.0
+                            ),
+                            100.0
+                        )
+                    ),
+
+                    "position": {
+                        "x": safe_float(
+                            saved.get("x"),
+                            0.0
+                        ),
+
+                        "y": max(
+                            0.0,
+                            safe_float(
+                                saved.get("y"),
+                                0.0
+                            )
+                        ),
+
+                        "z": safe_float(
+                            saved.get("z"),
+                            0.0
+                        )
+                    },
+
+                    "rotation": safe_float(
+                        saved.get("rotation"),
+                        0.0
+                    )
+                }
+
+        except Exception as e:
+
+            print(
+                "MongoDB load error:",
+                e
+            )
+
+
+    # Новый игрок
+
+    return {
+        "id": player_id,
+
+        "name": name or "Player",
+
+        "height": 1.0,
+
+        "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+
+        "rotation": 0.0
+    }
+
+
+def save_player(player):
+
+    if players_collection is None:
+        return
+
+    try:
+
+        position = player.get(
+            "position",
+            {}
+        )
+
+        players_collection.update_one(
+
+            {
+                "_id": player["id"]
+            },
+
+            {
+                "$set": {
+
+                    "name": player.get(
+                        "name",
+                        "Player"
+                    ),
+
+                    "height": safe_float(
+                        player.get(
+                            "height",
+                            1.0
+                        ),
+                        1.0
+                    ),
+
+                    "x": safe_float(
+                        position.get("x"),
+                        0.0
+                    ),
+
+                    "y": max(
+                        0.0,
+                        safe_float(
+                            position.get("y"),
+                            0.0
+                        )
+                    ),
+
+                    "z": safe_float(
+                        position.get("z"),
+                        0.0
+                    ),
+
+                    "rotation": safe_float(
+                        player.get("rotation"),
+                        0.0
+                    )
+                }
+            },
+
+            upsert=True
+        )
+
+    except Exception as e:
+
+        print(
+            "MongoDB save error:",
+            e
+        )
+
+
+# =========================
+# Broadcast
+# =========================
+
+async def broadcast(
+    message,
+    exclude=None
+):
+
+    disconnected = []
+
+    for player_id, websocket in list(
+        connected.items()
+    ):
+
+        if player_id == exclude:
+            continue
+
+        try:
+
+            await websocket.send_json(
+                message
+            )
+
+        except Exception:
+
+            disconnected.append(
+                player_id
+            )
+
+
+    for player_id in disconnected:
+
+        connected.pop(
+            player_id,
+            None
+        )
+
+
+# =========================
+# WebSocket
+# =========================
+
+@app.websocket("/ws")
+async def websocket_endpoint(
+    websocket: WebSocket
+):
+
+    await websocket.accept()
+
+    player_id = None
+
+    try:
+
+        # =========================
+        # JOIN
+        # =========================
+
+        first_message = (
+            await websocket.receive_json()
+        )
+
+        if first_message.get(
+            "type"
+        ) != "join":
+
+            await websocket.close()
             return
 
-        player_id = str(data.get("id", "")).strip()
-        name = str(data.get("name", "Player")).strip()[:24]
+
+        player_id = str(
+            first_message.get(
+                "id"
+            )
+            or ""
+        )
 
         if not player_id:
-            await websocket.close(code=1008)
+
+            await websocket.close()
             return
 
-        player = load_player(player_id, name)
 
-        async with lock:
-            players[player_id] = player
-            connections[player_id] = websocket
+        name = str(
+            first_message.get(
+                "name",
+                "Player"
+            )
+            or "Player"
+        )[:24]
 
-        await send(websocket, {
+
+        player = load_player(
+            player_id,
+            name
+        )
+
+        player["name"] = name
+
+
+        players[player_id] = player
+
+        connected[player_id] = websocket
+
+
+        # =========================
+        # WELCOME
+        # =========================
+
+        other_players = [
+
+            p
+
+            for pid, p in players.items()
+
+            if pid != player_id
+
+        ]
+
+
+        await websocket.send_json({
+
             "type": "welcome",
-            "player": public_player(player),
-            "players": [
-                public_player(p)
-                for pid, p in players.items()
-                if pid != player_id
-            ],
+
+            "player": player,
+
+            "players": other_players
+
         })
 
+
         await broadcast({
+
             "type": "player_joined",
-            "player": public_player(player),
+
+            "player": player
+
         }, exclude=player_id)
 
-        while True:
-            data = json.loads(await websocket.receive_text())
-            msg_type = data.get("type")
 
-            if msg_type == "move":
-                pos = data.get("position", {})
+        # =========================
+        # MAIN LOOP
+        # =========================
+
+        while True:
+
+            data = (
+                await websocket.receive_json()
+            )
+
+            message_type = data.get(
+                "type"
+            )
+
+
+            # =========================
+            # MOVE
+            # =========================
+
+            if message_type == "move":
+
+                position = data.get(
+                    "position"
+                ) or {}
+
+
+                x = safe_float(
+                    position.get("x"),
+                    player["position"]["x"]
+                )
+
+                y = safe_float(
+                    position.get("y"),
+                    player["position"]["y"]
+                )
+
+                z = safe_float(
+                    position.get("z"),
+                    player["position"]["z"]
+                )
+
+                rotation = safe_float(
+                    data.get("rotation"),
+                    player.get(
+                        "rotation",
+                        0.0
+                    )
+                )
+
+
+                # Границы мира
+
+                x = max(
+                    -190.0,
+                    min(190.0, x)
+                )
+
+                y = max(
+                    0.0,
+                    min(100.0, y)
+                )
+
+                z = max(
+                    -190.0,
+                    min(190.0, z)
+                )
+
+
                 player["position"] = {
-                    "x": clamp(float(pos.get("x", 0)), -190, 190),
-                    "y": clamp(float(pos.get("y", 0)), 0, 50),
-                    "z": clamp(float(pos.get("z", 0)), -190, 190),
+
+                    "x": x,
+
+                    "y": y,
+
+                    "z": z
+
                 }
-                player["rotation"] = float(data.get("rotation", 0))
+
+                player["rotation"] = rotation
+
 
                 await broadcast({
-                    "type": "player_moved",
-                    "player": public_player(player),
+
+                    "type":
+                        "player_moved",
+
+                    "player":
+                        player
+
                 }, exclude=player_id)
 
-            elif msg_type == "grow":
-                # Every accepted click adds exactly 1 cm.
-                player["height"] = round(player["height"] + 0.01, 2)
 
-                await send(websocket, {
-                    "type": "height_updated",
-                    "height": player["height"],
+            # =========================
+            # GROW
+            # =========================
+
+            elif message_type == "grow":
+
+                player["height"] = min(
+
+                    100.0,
+
+                    safe_float(
+                        player.get(
+                            "height",
+                            1.0
+                        ),
+                        1.0
+                    ) + 0.01
+
+                )
+
+
+                save_player(player)
+
+
+                await websocket.send_json({
+
+                    "type":
+                        "height_updated",
+
+                    "height":
+                        player["height"]
+
                 })
 
+
                 await broadcast({
-                    "type": "player_grew",
-                    "player": public_player(player),
+
+                    "type":
+                        "player_grew",
+
+                    "player":
+                        player
+
                 }, exclude=player_id)
 
-            elif msg_type == "chat":
-                text = str(data.get("text", "")).strip()[:180]
-                if text:
-                    await broadcast({
-                        "type": "chat",
-                        "name": player["name"],
-                        "playerId": player_id,
-                        "text": text,
-                    })
 
-            elif msg_type == "ping":
-                await send(websocket, {"type": "pong"})
+            # =========================
+            # CHAT
+            # =========================
+
+            elif message_type == "chat":
+
+                text = str(
+                    data.get(
+                        "text",
+                        ""
+                    )
+                    or ""
+                ).strip()
+
+
+                if not text:
+                    continue
+
+
+                text = text[:300]
+
+
+                await broadcast({
+
+                    "type": "chat",
+
+                    "name":
+                        player["name"],
+
+                    "text":
+                        text
+
+                })
+
 
     except WebSocketDisconnect:
-        pass
-    except Exception as exc:
-        print("WebSocket error:", exc)
-    finally:
-        if player_id and player:
-            save_player(player)
-            async with lock:
-                connections.pop(player_id, None)
-                players.pop(player_id, None)
 
-            await broadcast({
-                "type": "player_left",
-                "playerId": player_id,
-            })
+        pass
+
+    except Exception as e:
+
+        print(
+            "WebSocket error:",
+            e
+        )
+
+    finally:
+
+        if player_id:
+
+            player = players.get(
+                player_id
+            )
+
+            if player:
+
+                save_player(player)
+
+
+            connected.pop(
+                player_id,
+                None
+            )
+
+            players.pop(
+                player_id,
+                None
+            )
+
+
+            try:
+
+                await broadcast({
+
+                    "type":
+                        "player_left",
+
+                    "playerId":
+                        player_id
+
+                })
+
+            except Exception:
+
+                pass
