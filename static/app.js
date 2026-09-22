@@ -344,146 +344,138 @@ function createTrees() {
 function updatePlayer(dt) {
     if (!state.localPlayer) return;
 
-    const forward =
-        Number(state.keys.KeyW) -
-        Number(state.keys.KeyS);
+    const player = state.localPlayer;
 
-    const strafe =
-        Number(state.keys.KeyD) -
-        Number(state.keys.KeyA);
-
-    const length =
-        Math.hypot(forward, strafe) || 1;
-
-    if (forward || strafe) {
-
-        const speed = 7;
-
-        /*
-         * Направление относительно yaw камеры.
-         */
-
-        const moveForward =
-            forward / length;
-
-        const moveStrafe =
-            strafe / length;
-
-        const sin = Math.sin(state.yaw);
-        const cos = Math.cos(state.yaw);
-
-        const dx =
-            moveForward * sin +
-            moveStrafe * cos;
-
-        const dz =
-            moveForward * cos -
-            moveStrafe * sin;
-
-        state.localPlayer.position.x +=
-            dx * speed * dt;
-
-        state.localPlayer.position.z +=
-            dz * speed * dt;
-
-        /*
-         * Поворачиваем персонажа
-         * в сторону движения.
-         */
-
-        state.localPlayer.rotation.y =
-            Math.atan2(dx, dz);
-    }
-
-
-    /*
-     * Прыжок / гравитация
-     */
-
-    state.velocityY -=
-        18 * dt;
-
-    state.localPlayer.position.y +=
-        state.velocityY * dt;
-
-
-    /*
-     * Земля
-     */
-
+    // Защита от неправильных координат
     if (
-        state.localPlayer.position.y <= 0
+        !Number.isFinite(player.position.x) ||
+        !Number.isFinite(player.position.y) ||
+        !Number.isFinite(player.position.z)
     ) {
-
-        state.localPlayer.position.y = 0;
-
+        player.position.set(0, 0, 0);
         state.velocityY = 0;
-
         state.grounded = true;
     }
 
+    // Клавиши
+    const w = !!state.keys["KeyW"];
+    const s = !!state.keys["KeyS"];
+    const a = !!state.keys["KeyA"];
+    const d = !!state.keys["KeyD"];
 
-    /*
-     * Границы карты.
-     * Персонаж физически не может
-     * выйти за пределы мира.
-     */
+    let moveX = 0;
+    let moveZ = 0;
 
-    const WORLD_LIMIT = 190;
+    // Направление камеры
+    const forwardX = Math.sin(state.yaw);
+    const forwardZ = Math.cos(state.yaw);
 
-    state.localPlayer.position.x =
-        Math.max(
-            -WORLD_LIMIT,
-            Math.min(
-                WORLD_LIMIT,
-                state.localPlayer.position.x
-            )
-        );
+    // Правое направление камеры
+    const rightX = Math.cos(state.yaw);
+    const rightZ = -Math.sin(state.yaw);
 
-    state.localPlayer.position.z =
-        Math.max(
-            -WORLD_LIMIT,
-            Math.min(
-                WORLD_LIMIT,
-                state.localPlayer.position.z
-            )
-        );
+    // W / S
+    if (w) {
+        moveX += forwardX;
+        moveZ += forwardZ;
+    }
 
+    if (s) {
+        moveX -= forwardX;
+        moveZ -= forwardZ;
+    }
 
-    /*
-     * Отправляем положение серверу
-     */
+    // A / D
+    if (a) {
+        moveX -= rightX;
+        moveZ -= rightZ;
+    }
+
+    if (d) {
+        moveX += rightX;
+        moveZ += rightZ;
+    }
+
+    // Нормализация диагонального движения
+    const length = Math.hypot(moveX, moveZ);
+
+    if (length > 0) {
+        moveX /= length;
+        moveZ /= length;
+
+        const speed = 7;
+
+        player.position.x += moveX * speed * dt;
+        player.position.z += moveZ * speed * dt;
+
+        // Поворачиваем модель в сторону движения
+        player.rotation.y = Math.atan2(moveX, moveZ);
+    }
+
+    // =========================
+    // Прыжок / гравитация
+    // =========================
+
+    state.velocityY -= 18 * dt;
+
+    player.position.y += state.velocityY * dt;
+
+    if (player.position.y <= 0) {
+        player.position.y = 0;
+        state.velocityY = 0;
+        state.grounded = true;
+    }
+
+    // =========================
+    // Жёсткие границы мира
+    // =========================
+
+    const LIMIT = 190;
+
+    player.position.x = THREE.MathUtils.clamp(
+        player.position.x,
+        -LIMIT,
+        LIMIT
+    );
+
+    player.position.z = THREE.MathUtils.clamp(
+        player.position.z,
+        -LIMIT,
+        LIMIT
+    );
+
+    // Y тоже защищаем
+    if (!Number.isFinite(player.position.y)) {
+        player.position.y = 0;
+        state.velocityY = 0;
+    }
+
+    player.position.y = Math.max(
+        0,
+        Math.min(100, player.position.y)
+    );
+
+    // =========================
+    // Отправка серверу
+    // =========================
 
     const now = performance.now();
 
     if (
-        now - state.lastSent > 50
+        now - state.lastSent > 50 &&
+        state.ws &&
+        state.ws.readyState === WebSocket.OPEN
     ) {
-
         send({
-
             type: "move",
 
             position: {
-
-                x: Number(
-                    state.localPlayer.position.x
-                ),
-
-                y: Number(
-                    state.localPlayer.position.y
-                ),
-
-                z: Number(
-                    state.localPlayer.position.z
-                )
-
+                x: Number(player.position.x),
+                y: Number(player.position.y),
+                z: Number(player.position.z)
             },
 
-            rotation: Number(
-                state.localPlayer.rotation.y
-            )
-
+            rotation: Number(player.rotation.y)
         });
 
         state.lastSent = now;
@@ -601,7 +593,26 @@ chatForm.addEventListener("submit", e => {
 });
 
 window.addEventListener("keydown", e => {
-    state.keys[e.code] = true;
+    // Не перехватываем клавиатуру, когда пользователь пишет в чат
+    if (
+        e.target &&
+        (
+            e.target.tagName === "INPUT" ||
+            e.target.tagName === "TEXTAREA"
+        )
+    ) {
+        return;
+    }
+
+    if (
+        e.code === "KeyW" ||
+        e.code === "KeyA" ||
+        e.code === "KeyS" ||
+        e.code === "KeyD"
+    ) {
+        e.preventDefault();
+        state.keys[e.code] = true;
+    }
 
     if (e.code === "Space") {
         e.preventDefault();
@@ -614,7 +625,15 @@ window.addEventListener("keydown", e => {
 });
 
 window.addEventListener("keyup", e => {
-    state.keys[e.code] = false;
+    if (
+        e.code === "KeyW" ||
+        e.code === "KeyA" ||
+        e.code === "KeyS" ||
+        e.code === "KeyD"
+    ) {
+        e.preventDefault();
+        state.keys[e.code] = false;
+    }
 });
 
 window.addEventListener("resize", () => {
