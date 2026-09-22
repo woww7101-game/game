@@ -15,121 +15,112 @@
 
 <body>
 
-<div id="game"></div>
+    <!-- 3D игра -->
+    <div id="game"></div>
 
-<div id="login">
-    <div class="login-card">
-        <div class="logo">
-            Grow<span>World</span>
-        </div>
+    <!-- Окно входа -->
+    <div id="login" class="login-screen">
 
-        <p>
-            Исследуй онлайн 3D-мир и становись всё выше.
-        </p>
+        <div class="login-card">
 
-        <input
-            id="nameInput"
-            maxlength="24"
-            placeholder="Твоё имя"
-            autocomplete="off"
-        >
+            <h1>GrowWorld</h1>
 
-        <button id="startButton">
-            Войти в мир
-        </button>
-
-        <div id="loginStatus"></div>
-    </div>
-</div>
-
-<div id="hud" class="hidden">
-
-    <div class="topbar">
-
-        <div>
-            <div class="brand">
-                GrowWorld
-            </div>
-
-            <div id="online">
-                Онлайн: 1
-            </div>
-        </div>
-
-        <div class="height-box">
-            <span>
-                ТВОЙ РОСТ
-            </span>
-
-            <strong id="height">
-                1.00 м
-            </strong>
-        </div>
-
-    </div>
-
-    <button id="growButton">
-        +1 СМ
-    </button>
-
-    <div id="minimap">
-
-        <canvas
-            id="mapCanvas"
-            width="220"
-            height="220"
-        ></canvas>
-
-        <div class="map-label">
-            КАРТА
-        </div>
-
-    </div>
-
-    <div id="chat">
-
-        <div id="chatMessages"></div>
-
-        <form id="chatForm">
+            <p class="subtitle">
+                Онлайн 3D-мир, где ты можешь расти
+            </p>
 
             <input
-                id="chatInput"
-                maxlength="180"
-                placeholder="Написать сообщение..."
+                id="nameInput"
+                type="text"
+                maxlength="24"
+                placeholder="Введите имя"
                 autocomplete="off"
             >
 
-            <button type="submit">
-                ➤
+            <button id="startButton">
+                Войти в мир
             </button>
 
-        </form>
+            <div id="loginStatus"></div>
+
+        </div>
 
     </div>
 
-    <div class="controls">
+    <!-- HUD -->
+    <div id="hud" class="hidden">
 
-        <b>WASD</b> — ходьба &nbsp;
+        <div class="top-bar">
 
-        <b>SPACE</b> — прыжок &nbsp;
+            <div class="stats">
 
-        <b>мышь</b> — камера &nbsp;
+                <div class="stat">
+                    <span>Рост</span>
+                    <strong id="height">1.00 м</strong>
+                </div>
 
-        <b>колесо</b> — zoom
+                <div class="stat">
+                    <span id="online">
+                        Онлайн: 1
+                    </span>
+                </div>
+
+            </div>
+
+            <button id="growButton">
+                +1 см
+            </button>
+
+        </div>
+
+        <!-- Миникарта -->
+        <div id="minimap">
+            <canvas
+                id="mapCanvas"
+                width="180"
+                height="180"
+            ></canvas>
+        </div>
+
+        <!-- Чат -->
+        <div id="chat">
+
+            <div id="chatMessages"></div>
+
+            <form id="chatForm">
+
+                <input
+                    id="chatInput"
+                    type="text"
+                    maxlength="300"
+                    placeholder="Написать сообщение..."
+                    autocomplete="off"
+                >
+
+                <button type="submit">
+                    ➤
+                </button>
+
+            </form>
+
+        </div>
+
+        <!-- Управление -->
+        <div id="controls">
+            <span>WASD — движение</span>
+            <span>Space — прыжок</span>
+            <span>Колесо — приближение</span>
+            <span>Мышь — камера</span>
+        </div>
 
     </div>
 
-    <div id="crosshair">
-        +
-    </div>
-
-</div>
-
-<!-- Three.js -->
-<script src="https://unpkg.com/three@0.180.0/build/three.min.js"></script>
-
-<!-- GrowWorld -->
-<script src="/static/app.js"></script>
+    <!--
+        СНАЧАЛА загружается Three.js,
+        ПОТОМ app.js.
+    -->
+    <script src="/static/three.min.js"></script>
+    <script src="/static/app.js"></script>
 
 </body>
 </html>
