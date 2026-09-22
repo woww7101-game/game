@@ -2,58 +2,134 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    >
+
     <title>GrowWorld</title>
-    <link rel="stylesheet" href="/static/style.css">
+
+    <link rel="stylesheet" href="/style.css">
 </head>
+
 <body>
-<canvas id="game"></canvas>
+
+<div id="game"></div>
 
 <div id="login">
     <div class="login-card">
-        <div class="logo">Grow<span>World</span></div>
-        <p>Исследуй онлайн 3D-мир и становись всё выше.</p>
-        <input id="nameInput" maxlength="24" placeholder="Твоё имя" autocomplete="off">
-        <button id="startButton">Войти в мир</button>
+        <div class="logo">
+            Grow<span>World</span>
+        </div>
+
+        <p>
+            Исследуй онлайн 3D-мир и становись всё выше.
+        </p>
+
+        <input
+            id="nameInput"
+            maxlength="24"
+            placeholder="Твоё имя"
+            autocomplete="off"
+        >
+
+        <button id="startButton">
+            Войти в мир
+        </button>
+
         <div id="loginStatus"></div>
     </div>
 </div>
 
 <div id="hud" class="hidden">
+
     <div class="topbar">
+
         <div>
-            <div class="brand">GrowWorld</div>
-            <div id="online">Онлайн: 1</div>
+            <div class="brand">
+                GrowWorld
+            </div>
+
+            <div id="online">
+                Онлайн: 1
+            </div>
         </div>
+
         <div class="height-box">
-            <span>ТВОЙ РОСТ</span>
-            <strong id="height">1.00 м</strong>
+            <span>
+                ТВОЙ РОСТ
+            </span>
+
+            <strong id="height">
+                1.00 м
+            </strong>
         </div>
+
     </div>
 
-    <button id="growButton">+1 СМ</button>
+    <button id="growButton">
+        +1 СМ
+    </button>
 
     <div id="minimap">
-        <canvas id="mapCanvas" width="220" height="220"></canvas>
-        <div class="map-label">КАРТА</div>
+
+        <canvas
+            id="mapCanvas"
+            width="220"
+            height="220"
+        ></canvas>
+
+        <div class="map-label">
+            КАРТА
+        </div>
+
     </div>
 
     <div id="chat">
+
         <div id="chatMessages"></div>
+
         <form id="chatForm">
-            <input id="chatInput" maxlength="180" placeholder="Написать сообщение..." autocomplete="off">
-            <button>➤</button>
+
+            <input
+                id="chatInput"
+                maxlength="180"
+                placeholder="Написать сообщение..."
+                autocomplete="off"
+            >
+
+            <button type="submit">
+                ➤
+            </button>
+
         </form>
+
     </div>
 
     <div class="controls">
-        <b>WASD</b> — ходьба &nbsp; <b>SPACE</b> — прыжок &nbsp; <b>мышь</b> — камера &nbsp; <b>колесо</b> — zoom
+
+        <b>WASD</b> — ходьба &nbsp;
+
+        <b>SPACE</b> — прыжок &nbsp;
+
+        <b>мышь</b> — камера &nbsp;
+
+        <b>колесо</b> — zoom
+
     </div>
 
-    <div id="crosshair">+</div>
+    <div id="crosshair">
+        +
+    </div>
+
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.min.js"></script>
-<script src="/static/app.js"></script>
+<!-- Three.js -->
+<script src="https://unpkg.com/three@0.180.0/build/three.min.js"></script>
+
+<!-- GrowWorld -->
+<script src="/app.js"></script>
+
 </body>
 </html>
