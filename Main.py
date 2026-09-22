@@ -18,8 +18,11 @@ mongo_client = None
 players_collection = None
 
 if MONGODB_URI:
-    mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
-    db = mongo_client.get_default_database()
+    mongo_client = MongoClient(
+        MONGODB_URI,
+        serverSelectionTimeoutMS=5000
+    )
+    db = mongo_client["GrowWorld"]
     players_collection = db["players"]
 
 connections: Dict[str, WebSocket] = {}
