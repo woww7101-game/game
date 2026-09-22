@@ -15,10 +15,17 @@
 
 <body>
 
-    <!-- 3D игра -->
+    <!-- =========================
+         3D GAME
+    ========================== -->
+
     <div id="game"></div>
 
-    <!-- Экран входа -->
+
+    <!-- =========================
+         LOGIN
+    ========================== -->
+
     <div id="login" class="login-screen">
 
         <div class="login-card">
@@ -47,8 +54,14 @@
 
     </div>
 
-    <!-- Игровой HUD -->
+
+    <!-- =========================
+         GAME HUD
+    ========================== -->
+
     <div id="hud" class="hidden">
+
+        <!-- Верхняя панель -->
 
         <div class="top-bar">
 
@@ -56,11 +69,15 @@
 
                 <div class="stat">
                     <span>Рост</span>
-                    <strong id="height">1.00 м</strong>
+                    <strong id="height">
+                        1.00 м
+                    </strong>
                 </div>
 
                 <div class="stat">
-                    <span id="online">Онлайн: 1</span>
+                    <span id="online">
+                        Онлайн: 1
+                    </span>
                 </div>
 
             </div>
@@ -71,7 +88,11 @@
 
         </div>
 
-        <!-- Миникарта -->
+
+        <!-- =========================
+             MINIMAP
+        ========================== -->
+
         <div id="minimap">
 
             <canvas
@@ -82,7 +103,11 @@
 
         </div>
 
-        <!-- Чат -->
+
+        <!-- =========================
+             CHAT
+        ========================== -->
+
         <div id="chat">
 
             <div id="chatMessages"></div>
@@ -105,26 +130,102 @@
 
         </div>
 
-        <!-- Управление -->
+
+        <!-- =========================
+             CONTROLS
+        ========================== -->
+
         <div id="controls">
-            <span>WASD — движение</span>
-            <span>Space — прыжок</span>
-            <span>Колесо — приближение</span>
-            <span>Мышь — камера</span>
+
+            <span>
+                WASD — движение
+            </span>
+
+            <span>
+                Space — прыжок
+            </span>
+
+            <span>
+                Колесо — приближение
+            </span>
+
+            <span>
+                Мышь — камера
+            </span>
+
         </div>
 
     </div>
 
-    <!-- Three.js -->
-    <script src="https://unpkg.com/three@0.180.0/build/three.min.js"></script>
 
-    <!-- Проверка загрузки Three.js -->
-    <script>
-        console.log("Three.js:", typeof THREE);
+    <!-- =========================
+         THREE.JS 0.180.0
+    ========================== -->
+
+    <script type="module">
+
+        import * as THREE
+            from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
+
+
+        /*
+         * Делаем THREE глобальным,
+         * чтобы старый app.js мог использовать:
+         *
+         * THREE.Scene
+         * THREE.Mesh
+         * THREE.Vector3
+         * THREE.PerspectiveCamera
+         * и т.д.
+         */
+
+        window.THREE = THREE;
+
+
+        /*
+         * Проверка
+         */
+
+        console.log(
+            "Three.js:",
+            typeof window.THREE
+        );
+
+        console.log(
+            "Three.js version:",
+            THREE.REVISION
+        );
+
+
+        /*
+         * Загружаем игру ТОЛЬКО
+         * после загрузки Three.js.
+         */
+
+        const script =
+            document.createElement("script");
+
+        script.src = "/static/app.js";
+
+        script.onload = () => {
+
+            console.log(
+                "GrowWorld app.js loaded"
+            );
+
+        };
+
+        script.onerror = () => {
+
+            console.error(
+                "Не удалось загрузить /static/app.js"
+            );
+
+        };
+
+        document.body.appendChild(script);
+
     </script>
-
-    <!-- GrowWorld -->
-    <script src="/static/app.js"></script>
 
 </body>
 </html>
