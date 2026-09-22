@@ -18,7 +18,7 @@
     <!-- 3D игра -->
     <div id="game"></div>
 
-    <!-- Окно входа -->
+    <!-- Экран входа -->
     <div id="login" class="login-screen">
 
         <div class="login-card">
@@ -47,7 +47,7 @@
 
     </div>
 
-    <!-- HUD -->
+    <!-- Игровой HUD -->
     <div id="hud" class="hidden">
 
         <div class="top-bar">
@@ -60,9 +60,7 @@
                 </div>
 
                 <div class="stat">
-                    <span id="online">
-                        Онлайн: 1
-                    </span>
+                    <span id="online">Онлайн: 1</span>
                 </div>
 
             </div>
@@ -75,11 +73,13 @@
 
         <!-- Миникарта -->
         <div id="minimap">
+
             <canvas
                 id="mapCanvas"
                 width="180"
                 height="180"
             ></canvas>
+
         </div>
 
         <!-- Чат -->
@@ -115,11 +115,15 @@
 
     </div>
 
-    <!--
-        СНАЧАЛА загружается Three.js,
-        ПОТОМ app.js.
-    -->
-    <script src="/static/three.min.js"></script>
+    <!-- Three.js -->
+    <script src="https://unpkg.com/three@0.180.0/build/three.min.js"></script>
+
+    <!-- Проверка загрузки Three.js -->
+    <script>
+        console.log("Three.js:", typeof THREE);
+    </script>
+
+    <!-- GrowWorld -->
     <script src="/static/app.js"></script>
 
 </body>
