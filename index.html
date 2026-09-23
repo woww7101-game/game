@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
+
     <meta charset="UTF-8">
 
     <meta
@@ -10,10 +12,14 @@
 
     <title>GrowWorld</title>
 
-    <link rel="stylesheet" href="/static/style.css">
+    <link
+        rel="stylesheet"
+        href="/static/style.css"
+    >
+
 
     <!-- =========================
-         IMPORT MAP
+         THREE.JS IMPORT MAP
     ========================== -->
 
     <script type="importmap">
@@ -26,7 +32,9 @@
 
 </head>
 
+
 <body>
+
 
     <!-- =========================
          3D GAME
@@ -72,19 +80,27 @@
          GAME HUD
     ========================== -->
 
-    <div id="hud" class="hidden">
+    <div
+        id="hud"
+        class="hidden"
+    >
 
         <div class="top-bar">
 
             <div class="stats">
 
                 <div class="stat">
-                    <span>Рост</span>
+
+                    <span>
+                        Рост
+                    </span>
 
                     <strong id="height">
                         1.00 м
                     </strong>
+
                 </div>
+
 
                 <div class="stat">
 
@@ -95,6 +111,7 @@
                 </div>
 
             </div>
+
 
             <button id="growButton">
                 +1 см
@@ -125,6 +142,7 @@
         <div id="chat">
 
             <div id="chatMessages"></div>
+
 
             <form id="chatForm">
 
@@ -173,7 +191,8 @@
 
 
     <!-- =========================
-         THREE.JS + GLTFLOADER
+         THREE.JS
+         GLTF / OBJ / MTL
     ========================== -->
 
     <script type="module">
@@ -181,22 +200,47 @@
         import * as THREE
             from "three";
 
+
+        /*
+         * GLTF
+         */
+
         import { GLTFLoader }
             from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js";
 
 
         /*
-         * Делаем Three.js глобальным,
-         * чтобы app.js мог использовать THREE.
+         * OBJ
+         */
+
+        import { OBJLoader }
+            from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/OBJLoader.js";
+
+
+        /*
+         * MTL
+         */
+
+        import { MTLLoader }
+            from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/MTLLoader.js";
+
+
+        /*
+         * Делаем библиотеки
+         * доступными для app.js.
          */
 
         window.THREE = THREE;
 
         window.GLTFLoader = GLTFLoader;
 
+        window.OBJLoader = OBJLoader;
+
+        window.MTLLoader = MTLLoader;
+
 
         /*
-         * Проверка
+         * Проверка загрузки
          */
 
         console.log(
@@ -209,16 +253,34 @@
             THREE.REVISION
         );
 
+        console.log(
+            "GLTFLoader:",
+            typeof window.GLTFLoader
+        );
+
+        console.log(
+            "OBJLoader:",
+            typeof window.OBJLoader
+        );
+
+        console.log(
+            "MTLLoader:",
+            typeof window.MTLLoader
+        );
+
 
         /*
-         * Загружаем app.js после
-         * инициализации Three.js.
+         * Загружаем app.js только после
+         * загрузки всех библиотек.
          */
 
         const script =
             document.createElement("script");
 
-        script.src = "/static/app.js";
+
+        script.src =
+            "/static/app.js";
+
 
         script.onload = () => {
 
@@ -228,6 +290,7 @@
 
         };
 
+
         script.onerror = () => {
 
             console.error(
@@ -236,9 +299,14 @@
 
         };
 
-        document.body.appendChild(script);
+
+        document.body.appendChild(
+            script
+        );
 
     </script>
 
+
 </body>
+
 </html>
