@@ -110,96 +110,18 @@ function send(payload) {
 // PLAYER MODEL
 // ============================================================
 
-/*
-    ВАЖНО:
 
-    player.glb должен находиться здесь:
+// =========================================================
+// ROBLOX AVATAR
+// =========================================================
 
-    /static/models/player.glb
-*/
-// =========================
-// Roblox Avatar
-// =========================
+state.robloxUserId = null;
+
+state.robloxModelCache =
+    new Map();
+
 
 async function getRobloxAvatarData(userId) {
-
-    const response = await fetch(
-        `/roblox/avatar-data/${encodeURIComponent(userId)}`
-    );
-
-    if (!response.ok) {
-
-        let message = "Не удалось получить Roblox Avatar.";
-
-        try {
-            const error = await response.json();
-
-            if (error.detail) {
-                message =
-                    typeof error.detail === "string"
-                        ? error.detail
-                        : JSON.stringify(error.detail);
-            }
-
-        } catch (_) {}
-
-        throw new Error(message);
-    }
-
-    const data = await response.json();
-
-    if (!data.success) {
-
-        throw new Error(
-            `Roblox avatar state: ${data.state || "Unknown"}`
-        );
-    }
-
-    return data;
-}
-
-
-function normalizeRobloxModel(model) {
-
-    const box = new THREE.Box3().setFromObject(model);
-
-    const size = new THREE.Vector3();
-
-    box.getSize(size);
-
-    if (
-        !Number.isFinite(size.y) ||
-        size.y <= 0
-    ) {
-
-        throw new Error(
-            "Не удалось определить высоту Roblox-модели."
-        );
-    }
-
-    // Roblox avatar = 1.0 игровый метр
-    const scale = 1 / size.y;
-
-    model.scale.setScalar(scale);
-
-    const normalizedBox =
-        new THREE.Box3().setFromObject(model);
-
-    // Ставим ноги на землю
-    model.position.y -= normalizedBox.min.y;
-
-    const center = new THREE.Vector3();
-
-    normalizedBox.getCenter(center);
-
-    model.position.x -= center.x;
-    model.position.z -= center.z;
-
-    return model;
-}
-
-
-async function loadRobloxPlayerModel(userId) {
 
     userId = Number(userId);
 
@@ -207,49 +129,183 @@ async function loadRobloxPlayerModel(userId) {
         !Number.isInteger(userId) ||
         userId <= 0
     ) {
-
         throw new Error(
-            "Некорректный Roblox User ID."
+            "Invalid Roblox User ID"
         );
     }
 
-    // Используем уже загруженную модель
-    if (
-        state.robloxModelCache.has(userId)
-    ) {
-
-        return state.robloxModelCache.get(
-            userId
-        ).clone(true);
-    }
-
-    console.log(
-        "GrowWorld: загружаем Roblox avatar:",
-        userId
+    const response = await fetch(
+        `/roblox/avatar-data/${encodeURIComponent(userId)}`
     );
 
+    if (!response.ok) {
+
+        const text =
+            await response.text();
+
+        throw new Error(
+            `Roblox avatar-data HTTP ${response.status}: ${text}`
+        );
+    }
+
     const data =
-        await getRobloxAvatarData(userId);
+        await response.json();
+
+    if (!data.success) {
+
+        throw new Error(
+            `Roblox avatar state: ${
+                data.state || "Unknown"
+            }`
+        );
+    }
 
     console.log(
         "GrowWorld Roblox manifest:",
         data
     );
 
-    const mtlLoader = new MTLLoader();
+    return data;
+}
 
-    const objLoader = new OBJLoader();
 
-    // MTL находится на нашем сервере.
-    const mtlUrl =
-        `/roblox/asset/${encodeURIComponent(data.mtl)}`;
+// =========================================================
+// NORMALIZE ROBLOX MODEL
+// =========================================================
 
-    // Очень важно:
-    // ресурсные пути из MTL будут разрешаться
-    // относительно этого URL.
-    mtlLoader.setResourcePath(
-        `/roblox/asset/`
+function normalizeRobloxModel(model) {
+
+    const box =
+        new THREE.Box3()
+            .setFromObject(model);
+
+    const size =
+        new THREE.Vector3();
+
+    box.getSize(size);
+
+    if (
+        !Number.isFinite(size.y) ||
+        size.y <= 0
+    ) {
+        throw new Error(
+            "Roblox model has invalid height"
+        );
+    }
+
+    const scale =
+        1 / size.y;
+
+    model.scale.setScalar(
+        scale
     );
+
+    const normalizedBox =
+        new THREE.Box3()
+            .setFromObject(model);
+
+    const center =
+        new THREE.Vector3();
+
+    normalizedBox.getCenter(
+        center
+    );
+
+    model.position.y -=
+        normalizedBox.min.y;
+
+    model.position.x -=
+        center.x;
+
+    model.position.z -=
+        center.z;
+
+    return model;
+}
+
+
+// =========================================================
+// LOAD ROBLOX MODEL
+// =========================================================
+
+async function loadRobloxPlayerModel(
+    userId
+) {
+
+    userId = Number(userId);
+
+    if (
+        !Number.isInteger(userId) ||
+        userId <= 0
+    ) {
+        throw new Error(
+            "Invalid Roblox User ID"
+        );
+    }
+
+
+    // -----------------------------------------------------
+    // CACHE
+    // -----------------------------------------------------
+
+    if (
+        state.robloxModelCache
+            .has(userId)
+    ) {
+
+        console.log(
+            "GrowWorld: Roblox model from cache:",
+            userId
+        );
+
+        return state.robloxModelCache
+            .get(userId)
+            .clone(true);
+    }
+
+
+    console.log(
+        "GrowWorld: загружаем Roblox avatar:",
+        userId
+    );
+
+
+    // -----------------------------------------------------
+    // MANIFEST
+    // -----------------------------------------------------
+
+    const data =
+        await getRobloxAvatarData(
+            userId
+        );
+
+
+    if (!data.obj) {
+        throw new Error(
+            "Roblox manifest has no OBJ"
+        );
+    }
+
+    if (!data.mtl) {
+        throw new Error(
+            "Roblox manifest has no MTL"
+        );
+    }
+
+
+    // -----------------------------------------------------
+    // MTL
+    // -----------------------------------------------------
+
+    const mtlLoader =
+        new MTLLoader();
+
+
+    const mtlUrl =
+        `/roblox/asset/${
+            encodeURIComponent(data.mtl)
+        }`;
+
 
     const materials =
         await new Promise(
@@ -257,24 +313,137 @@ async function loadRobloxPlayerModel(userId) {
 
                 mtlLoader.load(
                     mtlUrl,
-
                     resolve,
-
                     undefined,
-
                     reject
                 );
+
             }
         );
 
+
     materials.preload();
+
+
+    // Roblox's exported MTL files can
+    // contain alpha settings which make
+    // the character look transparent.
+
+    for (
+        const key in materials.materials
+    ) {
+
+        const material =
+            materials.materials[key];
+
+        if (!material) {
+            continue;
+        }
+
+        material.transparent =
+            false;
+
+        material.depthWrite =
+            true;
+    }
+
+
+    // -----------------------------------------------------
+    // IMPORTANT:
+    // Correct Roblox CDN routing
+    // -----------------------------------------------------
+
+    if (
+        materials.manager &&
+        typeof materials.manager
+            .setURLModifier === "function"
+    ) {
+
+        materials.manager.setURLModifier(
+            (url) => {
+
+                try {
+
+                    // Extract everything after
+                    // the hostname.
+
+                    let assetId =
+                        url.split(
+                            "com/"
+                        )[1];
+
+                    if (!assetId) {
+
+                        assetId =
+                            url.split(
+                                "/"
+                            ).pop();
+                    }
+
+                    assetId =
+                        decodeURIComponent(
+                            assetId
+                        );
+
+                    assetId =
+                        assetId.split(
+                            "?"
+                        )[0];
+
+                    assetId =
+                        assetId.split(
+                            "#"
+                        )[0];
+
+                    console.log(
+                        "Roblox texture:",
+                        assetId
+                    );
+
+
+                    // The backend now calculates
+                    // the correct t0-t7 CDN host.
+
+                    return (
+                        `/roblox/asset/${
+                            encodeURIComponent(
+                                assetId
+                            )}`
+                    );
+
+                } catch (error) {
+
+                    console.warn(
+                        "Roblox texture URL error:",
+                        url,
+                        error
+                    );
+
+                    return url;
+                }
+            }
+        );
+    }
+
+
+    // -----------------------------------------------------
+    // OBJ
+    // -----------------------------------------------------
+
+    const objLoader =
+        new OBJLoader();
+
 
     objLoader.setMaterials(
         materials
     );
 
+
     const objUrl =
-        `/roblox/asset/${encodeURIComponent(data.obj)}`;
+        `/roblox/asset/${
+            encodeURIComponent(data.obj)
+        }`;
+
 
     const model =
         await new Promise(
@@ -282,57 +451,101 @@ async function loadRobloxPlayerModel(userId) {
 
                 objLoader.load(
                     objUrl,
-
                     resolve,
-
                     undefined,
-
                     reject
                 );
+
             }
         );
 
-    model.traverse(object => {
 
-        if (!object.isMesh) {
-            return;
-        }
+    // -----------------------------------------------------
+    // MATERIAL SETTINGS
+    // -----------------------------------------------------
 
-        object.castShadow = true;
-        object.receiveShadow = true;
+    model.traverse(
+        (object) => {
 
-        if (object.material) {
+            if (
+                !object.isMesh
+            ) {
+                return;
+            }
 
-            if (Array.isArray(object.material)) {
+            object.castShadow =
+                true;
+
+            object.receiveShadow =
+                true;
+
+
+            if (
+                Array.isArray(
+                    object.material
+                )
+            ) {
 
                 object.material =
                     object.material.map(
-                        material =>
-                            material.clone()
+                        (material) => {
+
+                            if (
+                                material
+                            ) {
+
+                                material.transparent =
+                                    false;
+
+                                material.depthWrite =
+                                    true;
+                            }
+
+                            return material;
+                        }
                     );
 
-            } else {
+            } else if (
+                object.material
+            ) {
 
-                object.material =
-                    object.material.clone();
+                object.material.transparent =
+                    false;
+
+                object.material.depthWrite =
+                    true;
             }
         }
-    });
+    );
+
+
+    // -----------------------------------------------------
+    // NORMALIZE
+    // -----------------------------------------------------
 
     normalizeRobloxModel(
         model
     );
+
+
+    // -----------------------------------------------------
+    // CACHE
+    // -----------------------------------------------------
 
     state.robloxModelCache.set(
         userId,
         model
     );
 
+
     console.log(
         "GrowWorld: Roblox avatar загружен!"
     );
 
-    return model.clone(true);
+
+    return model.clone(
+        true
+    );
 }
 
 function loadPlayerModel() {
