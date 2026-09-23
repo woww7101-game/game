@@ -706,18 +706,11 @@ async def get_roblox_avatar_data(user_id: int):
 
 
 @app.get("/roblox/asset/{asset_id:path}")
-async def get_roblox_asset(asset_id: str):
+async def roblox_asset(asset_id: str):
 
-    if not asset_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Asset ID отсутствует."
-        )
+    asset_id = asset_id.strip()
 
-    # MTL/OBJ иногда могут передавать имя
-    # с расширением. Убираем его для CDN ID.
-    clean_id = asset_id.strip()
-
+    # Убираем возможные расширения
     for extension in (
         ".png",
         ".jpg",
@@ -727,59 +720,123 @@ async def get_roblox_asset(asset_id: str):
         ".obj",
         ".mtl"
     ):
-        if clean_id.lower().endswith(extension):
-            clean_id = clean_id[:-len(extension)]
-            break
+        if asset_id.lower().endswith(extension):
+            asset_id = asset_id[
+                :-len(extension)
+            ]
 
-    if not clean_id:
+    if not asset_id:
         raise HTTPException(
             status_code=400,
-            detail="Некорректный Roblox asset ID."
+            detail="Invalid Roblox asset ID"
         )
 
-    url = ROBLOX_CDN + clean_id
+    # -------------------------------------------------
+    # Roblox 30DAY assets
+    # -------------------------------------------------
 
-    try:
+    if asset_id.startswith("30DAY-"):
 
-        async with httpx.AsyncClient(
-            timeout=30.0,
-            follow_redirects=True
-        ) as client:
+        # Roblox CDN может использовать разные
+        # t0-t7 хосты.
+        #
+        # Проверяем их последовательно, пока
+        # не найдём рабочий.
 
-            response = await client.get(url)
+        cdn_hosts = [
+            "https://t0.rbxcdn.com",
+            "https://t1.rbxcdn.com",
+            "https://t2.rbxcdn.com",
+            "https://t3.rbxcdn.com",
+            "https://t4.rbxcdn.com",
+            "https://t5.rbxcdn.com",
+            "https://t6.rbxcdn.com",
+            "https://t7.rbxcdn.com",
+        ]
 
-        if response.status_code != 200:
+    else:
 
-            raise HTTPException(
-                status_code=response.status_code,
-                detail="Roblox CDN вернул ошибку."
+        cdn_hosts = [
+            "https://t1.rbxcdn.com"
+        ]
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 "
+            "(Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 "
+            "(KHTML, like Gecko) "
+            "Chrome/140 Safari/537.36"
+        ),
+        "Accept": "*/*",
+    }
+
+    async with httpx.AsyncClient(
+        timeout=30,
+        follow_redirects=True
+    ) as client:
+
+        for host in cdn_hosts:
+
+            url = (
+                f"{host}/{asset_id}"
             )
 
-        from fastapi.responses import Response
+            try:
 
-        content_type = (
-            response.headers.get(
-                "content-type"
-            )
-            or "application/octet-stream"
-        )
+                print(
+                    "Trying Roblox CDN:",
+                    url
+                )
 
-        return Response(
-            content=response.content,
-            media_type=content_type
-        )
+                response = await client.get(
+                    url,
+                    headers=headers
+                )
 
-    except httpx.RequestError as e:
+                if response.status_code == 200:
 
-        print(
-            "Roblox CDN error:",
-            e
-        )
+                    content_type = (
+                        response.headers.get(
+                            "content-type"
+                        )
+                        or "application/octet-stream"
+                    )
 
-        raise HTTPException(
-            status_code=502,
-            detail="Не удалось получить Roblox asset."
-        )
+                    print(
+                        "Roblox CDN SUCCESS:",
+                        url,
+                        content_type,
+                        len(response.content)
+                    )
+
+                    return Response(
+                        content=response.content,
+                        media_type=content_type,
+                        headers={
+                            "Cache-Control":
+                                "public, max-age=86400"
+                        }
+                    )
+
+                print(
+                    "Roblox CDN failed:",
+                    response.status_code,
+                    url
+                )
+
+            except Exception as error:
+
+                print(
+                    "Roblox CDN request error:",
+                    url,
+                    repr(error)
+                )
+
+    raise HTTPException(
+        status_code=502,
+        detail="Roblox CDN returned error."
+    )
 
 # =========================
 # WebSocket
