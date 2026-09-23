@@ -11,6 +11,19 @@
     <title>GrowWorld</title>
 
     <link rel="stylesheet" href="/static/style.css">
+
+    <!-- =========================
+         IMPORT MAP
+    ========================== -->
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+        }
+    }
+    </script>
+
 </head>
 
 <body>
@@ -61,23 +74,24 @@
 
     <div id="hud" class="hidden">
 
-        <!-- Верхняя панель -->
-
         <div class="top-bar">
 
             <div class="stats">
 
                 <div class="stat">
                     <span>Рост</span>
+
                     <strong id="height">
                         1.00 м
                     </strong>
                 </div>
 
                 <div class="stat">
+
                     <span id="online">
                         Онлайн: 1
                     </span>
+
                 </div>
 
             </div>
@@ -159,29 +173,25 @@
 
 
     <!-- =========================
-         THREE.JS 0.180.0
+         THREE.JS + GLTFLOADER
     ========================== -->
 
     <script type="module">
 
         import * as THREE
-            from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
+            from "three";
+
         import { GLTFLoader }
             from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js";
 
 
         /*
-         * Делаем THREE глобальным,
-         * чтобы старый app.js мог использовать:
-         *
-         * THREE.Scene
-         * THREE.Mesh
-         * THREE.Vector3
-         * THREE.PerspectiveCamera
-         * и т.д.
+         * Делаем Three.js глобальным,
+         * чтобы app.js мог использовать THREE.
          */
 
         window.THREE = THREE;
+
         window.GLTFLoader = GLTFLoader;
 
 
@@ -201,8 +211,8 @@
 
 
         /*
-         * Загружаем игру ТОЛЬКО
-         * после загрузки Three.js.
+         * Загружаем app.js после
+         * инициализации Three.js.
          */
 
         const script =
