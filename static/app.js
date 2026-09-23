@@ -26,7 +26,10 @@ const state = {
 
     // Загруженная модель персонажа
     playerModelTemplate: null,
-    playerModelPromise: null
+    playerModelPromise: null,
+
+    robloxUserId: null,
+    robloxModelCache: new Map()
 };
 
 localStorage.setItem("growworld_id", state.id);
@@ -56,7 +59,6 @@ const mapCtx = mapCanvas.getContext("2d");
 
 nameInput.value =
     localStorage.getItem("growworld_name") || "";
-
 
 // ============================================================
 // UTILS
@@ -115,6 +117,223 @@ function send(payload) {
 
     /static/models/player.glb
 */
+// =========================
+// Roblox Avatar
+// =========================
+
+async function getRobloxAvatarData(userId) {
+
+    const response = await fetch(
+        `/roblox/avatar-data/${encodeURIComponent(userId)}`
+    );
+
+    if (!response.ok) {
+
+        let message = "Не удалось получить Roblox Avatar.";
+
+        try {
+            const error = await response.json();
+
+            if (error.detail) {
+                message =
+                    typeof error.detail === "string"
+                        ? error.detail
+                        : JSON.stringify(error.detail);
+            }
+
+        } catch (_) {}
+
+        throw new Error(message);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+
+        throw new Error(
+            `Roblox avatar state: ${data.state || "Unknown"}`
+        );
+    }
+
+    return data;
+}
+
+
+function normalizeRobloxModel(model) {
+
+    const box = new THREE.Box3().setFromObject(model);
+
+    const size = new THREE.Vector3();
+
+    box.getSize(size);
+
+    if (
+        !Number.isFinite(size.y) ||
+        size.y <= 0
+    ) {
+
+        throw new Error(
+            "Не удалось определить высоту Roblox-модели."
+        );
+    }
+
+    // Roblox avatar = 1.0 игровый метр
+    const scale = 1 / size.y;
+
+    model.scale.setScalar(scale);
+
+    const normalizedBox =
+        new THREE.Box3().setFromObject(model);
+
+    // Ставим ноги на землю
+    model.position.y -= normalizedBox.min.y;
+
+    const center = new THREE.Vector3();
+
+    normalizedBox.getCenter(center);
+
+    model.position.x -= center.x;
+    model.position.z -= center.z;
+
+    return model;
+}
+
+
+async function loadRobloxPlayerModel(userId) {
+
+    userId = Number(userId);
+
+    if (
+        !Number.isInteger(userId) ||
+        userId <= 0
+    ) {
+
+        throw new Error(
+            "Некорректный Roblox User ID."
+        );
+    }
+
+    // Используем уже загруженную модель
+    if (
+        state.robloxModelCache.has(userId)
+    ) {
+
+        return state.robloxModelCache.get(
+            userId
+        ).clone(true);
+    }
+
+    console.log(
+        "GrowWorld: загружаем Roblox avatar:",
+        userId
+    );
+
+    const data =
+        await getRobloxAvatarData(userId);
+
+    console.log(
+        "GrowWorld Roblox manifest:",
+        data
+    );
+
+    const mtlLoader = new MTLLoader();
+
+    const objLoader = new OBJLoader();
+
+    // MTL находится на нашем сервере.
+    const mtlUrl =
+        `/roblox/asset/${encodeURIComponent(data.mtl)}`;
+
+    // Очень важно:
+    // ресурсные пути из MTL будут разрешаться
+    // относительно этого URL.
+    mtlLoader.setResourcePath(
+        `/roblox/asset/`
+    );
+
+    const materials =
+        await new Promise(
+            (resolve, reject) => {
+
+                mtlLoader.load(
+                    mtlUrl,
+
+                    resolve,
+
+                    undefined,
+
+                    reject
+                );
+            }
+        );
+
+    materials.preload();
+
+    objLoader.setMaterials(
+        materials
+    );
+
+    const objUrl =
+        `/roblox/asset/${encodeURIComponent(data.obj)}`;
+
+    const model =
+        await new Promise(
+            (resolve, reject) => {
+
+                objLoader.load(
+                    objUrl,
+
+                    resolve,
+
+                    undefined,
+
+                    reject
+                );
+            }
+        );
+
+    model.traverse(object => {
+
+        if (!object.isMesh) {
+            return;
+        }
+
+        object.castShadow = true;
+        object.receiveShadow = true;
+
+        if (object.material) {
+
+            if (Array.isArray(object.material)) {
+
+                object.material =
+                    object.material.map(
+                        material =>
+                            material.clone()
+                    );
+
+            } else {
+
+                object.material =
+                    object.material.clone();
+            }
+        }
+    });
+
+    normalizeRobloxModel(
+        model
+    );
+
+    state.robloxModelCache.set(
+        userId,
+        model
+    );
+
+    console.log(
+        "GrowWorld: Roblox avatar загружен!"
+    );
+
+    return model.clone(true);
+}
 
 function loadPlayerModel() {
 
@@ -557,17 +776,9 @@ function connect() {
 // CREATE LOCAL PLAYER
 // ============================================================
 
-function createLocalPlayer(p) {
+async function createLocalPlayer(p) {
 
-    /*
-        Создаём контейнер игрока.
-
-        Даже если GLB ещё грузится,
-        контейнер уже существует.
-    */
-
-    const group =
-        new THREE.Group();
+    const group = new THREE.Group();
 
     group.position.set(
         Number(p.position.x) || 0,
@@ -581,41 +792,39 @@ function createLocalPlayer(p) {
     group.userData.height =
         Number(p.height) || 1;
 
-    state.localPlayer =
-        group;
+    state.localPlayer = group;
 
     state.scene.add(group);
 
     state.yaw =
         Number(p.rotation) || 0;
 
+    // ---------------------------------
+    // Roblox User ID
+    // ---------------------------------
 
-    /*
-        Загружаем настоящего персонажа.
-    */
+    const robloxId =
+        Number(
+            localStorage.getItem(
+                "growworld_roblox_id"
+            )
+        );
 
-    loadPlayerModel()
-        .then(() => {
+    if (
+        Number.isInteger(robloxId) &&
+        robloxId > 0
+    ) {
+
+        try {
+
+            const model =
+                await loadRobloxPlayerModel(
+                    robloxId
+                );
 
             if (!state.localPlayer) {
                 return;
             }
-
-            /*
-                Если модель уже существует,
-                ничего не делаем.
-            */
-
-            if (
-                state.localPlayer.userData.model
-            ) {
-                return;
-            }
-
-            const model =
-                clonePlayerModel();
-
-            if (!model) return;
 
             state.localPlayer.userData.model =
                 model;
@@ -626,23 +835,65 @@ function createLocalPlayer(p) {
                 group,
                 state.height
             );
-        })
 
-        .catch(error => {
+            console.log(
+                "GrowWorld: твой Roblox avatar установлен."
+            );
+
+            return;
+
+        } catch (error) {
 
             console.error(
-                "GrowWorld: не удалось загрузить персонажа.",
+                "GrowWorld Roblox avatar error:",
                 error
             );
 
             addChatMessage(
                 "Система",
-                "Не удалось загрузить 3D-модель персонажа.",
+                "Не удалось загрузить Roblox-аватар. Используется запасная модель.",
                 true
             );
-        });
-}
+        }
+    }
 
+    // ---------------------------------
+    // Fallback: player.glb
+    // ---------------------------------
+
+    try {
+
+        await loadPlayerModel();
+
+        if (!state.localPlayer) {
+            return;
+        }
+
+        const model =
+            clonePlayerModel();
+
+        if (!model) {
+            return;
+        }
+
+        state.localPlayer.userData.model =
+            model;
+
+        group.add(model);
+
+        applyPlayerHeight(
+            group,
+            state.height
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Ошибка загрузки запасной модели:",
+            error
+        );
+    }
+}
 
 // ============================================================
 // REMOTE PLAYER
