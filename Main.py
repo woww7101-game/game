@@ -104,6 +104,10 @@ def load_player(player_id, name):
                         or saved.get("name")
                         or "Player"
                     ),
+                    
+                    "robloxUserId": saved.get(
+                        "robloxUserId"
+                    ),
 
                     "height": max(
                         0.01,
@@ -193,6 +197,9 @@ def save_player(player):
                     "name": player.get(
                         "name",
                         "Player"
+                    ),
+                    "robloxUserId": player.get(
+                        "robloxUserId"
                     ),
 
                     "height": safe_float(
