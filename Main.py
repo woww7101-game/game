@@ -3,6 +3,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pymongo import MongoClient
+import httpx
+from fastapi import HTTPException
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -14,7 +16,7 @@ app = FastAPI()
 # =========================
 
 MONGODB_URI = os.getenv("MONGODB_URI")
-
+ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY")
 mongo_client = None
 db = None
 players_collection = None
@@ -275,6 +277,70 @@ async def broadcast(
             None
         )
 
+@app.get("/roblox/avatar/{user_id}")
+async def get_roblox_avatar(user_id: int):
+
+    if not ROBLOX_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="ROBLOX_API_KEY не настроен на сервере."
+        )
+
+    if user_id <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Некорректный Roblox User ID."
+        )
+
+    url = (
+        "https://thumbnails.roblox.com"
+        "/v1/users/avatar-3d"
+    )
+
+    headers = {
+        "x-api-key": ROBLOX_API_KEY
+    }
+
+    params = {
+        "userId": user_id
+    }
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=15.0
+        ) as client:
+
+            response = await client.get(
+                url,
+                headers=headers,
+                params=params
+            )
+
+        if response.status_code != 200:
+            print(
+                "Roblox API error:",
+                response.status_code,
+                response.text
+            )
+
+            raise HTTPException(
+                status_code=response.status_code,
+                detail="Roblox API вернул ошибку."
+            )
+
+        return response.json()
+
+    except httpx.RequestError as e:
+
+        print(
+            "Roblox connection error:",
+            e
+        )
+
+        raise HTTPException(
+            status_code=502,
+            detail="Не удалось связаться с Roblox."
+        )
 
 # =========================
 # WebSocket
