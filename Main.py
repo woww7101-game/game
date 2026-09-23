@@ -805,6 +805,10 @@ async def websocket_endpoint(
             return
 
 
+        # =========================
+        # Player ID
+        # =========================
+
         player_id = str(
             first_message.get(
                 "id"
@@ -818,6 +822,10 @@ async def websocket_endpoint(
             return
 
 
+        # =========================
+        # Player name
+        # =========================
+
         name = str(
             first_message.get(
                 "name",
@@ -827,13 +835,45 @@ async def websocket_endpoint(
         )[:24]
 
 
+        # =========================
+        # Roblox User ID
+        # =========================
+
+        roblox_user_id = safe_float(
+            first_message.get(
+                "robloxUserId"
+            ),
+            0
+        )
+
+        roblox_user_id = int(
+            roblox_user_id
+        )
+
+
+        # =========================
+        # Load player
+        # =========================
+
         player = load_player(
             player_id,
             name
         )
 
+
         player["name"] = name
 
+
+        player["robloxUserId"] = (
+            roblox_user_id
+            if roblox_user_id > 0
+            else None
+        )
+
+
+        # =========================
+        # Add to online players
+        # =========================
 
         players[player_id] = player
 
@@ -865,6 +905,10 @@ async def websocket_endpoint(
 
         })
 
+
+        # =========================
+        # Notify other players
+        # =========================
 
         await broadcast({
 
@@ -925,7 +969,9 @@ async def websocket_endpoint(
                 )
 
 
-                # Границы мира
+                # =========================
+                # World boundaries
+                # =========================
 
                 x = max(
                     -190.0,
@@ -988,7 +1034,9 @@ async def websocket_endpoint(
                 )
 
 
-                save_player(player)
+                save_player(
+                    player
+                )
 
 
                 await websocket.send_json({
@@ -1048,9 +1096,14 @@ async def websocket_endpoint(
                 })
 
 
+    # =========================
+    # Disconnect
+    # =========================
+
     except WebSocketDisconnect:
 
         pass
+
 
     except Exception as e:
 
@@ -1058,6 +1111,11 @@ async def websocket_endpoint(
             "WebSocket error:",
             e
         )
+
+
+    # =========================
+    # Cleanup
+    # =========================
 
     finally:
 
@@ -1067,15 +1125,19 @@ async def websocket_endpoint(
                 player_id
             )
 
+
             if player:
 
-                save_player(player)
+                save_player(
+                    player
+                )
 
 
             connected.pop(
                 player_id,
                 None
             )
+
 
             players.pop(
                 player_id,
@@ -1094,6 +1156,7 @@ async def websocket_endpoint(
                         player_id
 
                 })
+
 
             except Exception:
 
