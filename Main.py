@@ -567,6 +567,214 @@ async def test_roblox_files(user_id: int):
         )
 
 # =========================
+# Roblox 3D Avatar Assets
+# =========================
+
+ROBLOX_CDN = "https://t1.rbxcdn.com/"
+
+
+@app.get("/roblox/avatar-data/{user_id}")
+async def get_roblox_avatar_data(user_id: int):
+
+    if not ROBLOX_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="ROBLOX_API_KEY не настроен."
+        )
+
+    if user_id <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Некорректный Roblox User ID."
+        )
+
+    avatar_url = (
+        "https://thumbnails.roblox.com"
+        "/v1/users/avatar-3d"
+    )
+
+    headers = {
+        "x-api-key": ROBLOX_API_KEY
+    }
+
+    try:
+
+        async with httpx.AsyncClient(
+            timeout=30.0,
+            follow_redirects=True
+        ) as client:
+
+            response = await client.get(
+                avatar_url,
+                headers=headers,
+                params={
+                    "userId": user_id
+                }
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail="Roblox Avatar API error."
+                )
+
+            data = response.json()
+
+            if data.get("state") != "Completed":
+
+                return {
+                    "success": False,
+                    "state": data.get("state"),
+                    "message": "Roblox avatar ещё не готов."
+                }
+
+            image_url = data.get("imageUrl")
+
+            if not image_url:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Roblox не вернул imageUrl."
+                )
+
+            manifest_response = await client.get(
+                image_url
+            )
+
+            if manifest_response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Не удалось получить Roblox 3D manifest."
+                )
+
+            manifest = manifest_response.json()
+
+            obj_id = manifest.get("obj")
+            mtl_id = manifest.get("mtl")
+
+            if not obj_id:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Roblox manifest не содержит OBJ."
+                )
+
+            if not mtl_id:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Roblox manifest не содержит MTL."
+                )
+
+            return {
+                "success": True,
+                "userId": user_id,
+
+                "obj": obj_id,
+
+                "mtl": mtl_id,
+
+                "textures": manifest.get(
+                    "textures",
+                    []
+                ),
+
+                "aabb": manifest.get(
+                    "aabb"
+                ),
+
+                "camera": manifest.get(
+                    "camera"
+                )
+            }
+
+    except httpx.RequestError as e:
+
+        print(
+            "Roblox avatar data error:",
+            e
+        )
+
+        raise HTTPException(
+            status_code=502,
+            detail="Ошибка соединения с Roblox."
+        )
+
+
+@app.get("/roblox/asset/{asset_id:path}")
+async def get_roblox_asset(asset_id: str):
+
+    if not asset_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Asset ID отсутствует."
+        )
+
+    # MTL/OBJ иногда могут передавать имя
+    # с расширением. Убираем его для CDN ID.
+    clean_id = asset_id.strip()
+
+    for extension in (
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".tga",
+        ".obj",
+        ".mtl"
+    ):
+        if clean_id.lower().endswith(extension):
+            clean_id = clean_id[:-len(extension)]
+            break
+
+    if not clean_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Некорректный Roblox asset ID."
+        )
+
+    url = ROBLOX_CDN + clean_id
+
+    try:
+
+        async with httpx.AsyncClient(
+            timeout=30.0,
+            follow_redirects=True
+        ) as client:
+
+            response = await client.get(url)
+
+        if response.status_code != 200:
+
+            raise HTTPException(
+                status_code=response.status_code,
+                detail="Roblox CDN вернул ошибку."
+            )
+
+        from fastapi.responses import Response
+
+        content_type = (
+            response.headers.get(
+                "content-type"
+            )
+            or "application/octet-stream"
+        )
+
+        return Response(
+            content=response.content,
+            media_type=content_type
+        )
+
+    except httpx.RequestError as e:
+
+        print(
+            "Roblox CDN error:",
+            e
+        )
+
+        raise HTTPException(
+            status_code=502,
+            detail="Не удалось получить Roblox asset."
+        )
+
+# =========================
 # WebSocket
 # =========================
 
