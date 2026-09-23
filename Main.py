@@ -343,6 +343,230 @@ async def get_roblox_avatar(user_id: int):
         )
 
 # =========================
+# Roblox 3D Avatar Test
+# =========================
+
+@app.get("/roblox/test-files/{user_id}")
+async def test_roblox_files(user_id: int):
+
+    if not ROBLOX_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="ROBLOX_API_KEY не настроен."
+        )
+
+    if user_id <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Некорректный Roblox User ID."
+        )
+
+    avatar_url = (
+        "https://thumbnails.roblox.com"
+        "/v1/users/avatar-3d"
+    )
+
+    headers = {
+        "x-api-key": ROBLOX_API_KEY
+    }
+
+    params = {
+        "userId": user_id
+    }
+
+    try:
+
+        async with httpx.AsyncClient(
+            timeout=30.0,
+            follow_redirects=True
+        ) as client:
+
+            # -------------------------
+            # 1. Получаем manifest
+            # -------------------------
+
+            response = await client.get(
+                avatar_url,
+                headers=headers,
+                params=params
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail={
+                        "message": "Roblox Avatar API error",
+                        "response": response.text
+                    }
+                )
+
+            data = response.json()
+
+            print(
+                "Roblox avatar response:",
+                data
+            )
+
+            if data.get("state") != "Completed":
+                return {
+                    "success": False,
+                    "state": data.get("state"),
+                    "message": "Avatar ещё не готов."
+                }
+
+            image_url = data.get("imageUrl")
+
+            if not image_url:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Roblox не вернул imageUrl."
+                )
+
+            # -------------------------
+            # 2. Получаем OBJ manifest
+            # -------------------------
+
+            obj_response = await client.get(
+                image_url
+            )
+
+            if obj_response.status_code != 200:
+                raise HTTPException(
+                    status_code=obj_response.status_code,
+                    detail={
+                        "message": "Не удалось получить OBJ manifest",
+                        "status": obj_response.status_code
+                    }
+                )
+
+            manifest = obj_response.json()
+
+            print(
+                "Roblox 3D manifest:",
+                manifest
+            )
+
+            obj_id = manifest.get("obj")
+            mtl_id = manifest.get("mtl")
+            textures = manifest.get(
+                "textures",
+                []
+            )
+
+            if not obj_id:
+                raise HTTPException(
+                    status_code=502,
+                    detail="В manifest отсутствует obj."
+                )
+
+            if not mtl_id:
+                raise HTTPException(
+                    status_code=502,
+                    detail="В manifest отсутствует mtl."
+                )
+
+            # -------------------------
+            # 3. Формируем CDN URL
+            # -------------------------
+
+            obj_url = (
+                "https://t1.rbxcdn.com/"
+                + obj_id
+            )
+
+            mtl_url = (
+                "https://t1.rbxcdn.com/"
+                + mtl_id
+            )
+
+            # -------------------------
+            # 4. Скачиваем OBJ
+            # -------------------------
+
+            obj_file = await client.get(
+                obj_url
+            )
+
+            print(
+                "OBJ status:",
+                obj_file.status_code
+            )
+
+            print(
+                "OBJ size:",
+                len(obj_file.content)
+            )
+
+            # -------------------------
+            # 5. Скачиваем MTL
+            # -------------------------
+
+            mtl_file = await client.get(
+                mtl_url
+            )
+
+            print(
+                "MTL status:",
+                mtl_file.status_code
+            )
+
+            print(
+                "MTL size:",
+                len(mtl_file.content)
+            )
+
+            # -------------------------
+            # 6. Возвращаем результат
+            # -------------------------
+
+            return {
+                "success": True,
+
+                "userId": user_id,
+
+                "state": data.get(
+                    "state"
+                ),
+
+                "obj": {
+                    "id": obj_id,
+                    "url": obj_url,
+                    "status": obj_file.status_code,
+                    "size": len(
+                        obj_file.content
+                    )
+                },
+
+                "mtl": {
+                    "id": mtl_id,
+                    "url": mtl_url,
+                    "status": mtl_file.status_code,
+                    "size": len(
+                        mtl_file.content
+                    )
+                },
+
+                "textures": {
+                    "count": len(textures),
+                    "ids": textures
+                }
+            }
+
+    except httpx.RequestError as e:
+
+        print(
+            "Roblox CDN request error:",
+            e
+        )
+
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Ошибка соединения с Roblox CDN."
+            )
+        )
+
+# =========================
 # WebSocket
 # =========================
 
