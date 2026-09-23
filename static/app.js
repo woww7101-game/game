@@ -626,151 +626,243 @@ function connect() {
             ? "wss"
             : "ws";
 
+
     state.ws =
         new WebSocket(
             `${protocol}://${location.host}/ws`
         );
 
 
+    // =========================
+    // WebSocket connected
+    // =========================
+
     state.ws.onopen = () => {
 
+        const robloxUserId =
+            Number(
+                localStorage.getItem(
+                    "growworld_roblox_id"
+                )
+            ) || null;
+
+
         send({
+
             type: "join",
+
             id: state.id,
-            name: state.name
+
+            name: state.name,
+
+            robloxUserId:
+                robloxUserId
+
         });
+
+
+        console.log(
+            "GrowWorld: подключение установлено"
+        );
+
+        console.log(
+            "Roblox User ID:",
+            robloxUserId
+        );
+
 
         loginStatus.textContent = "";
     };
 
 
-    state.ws.onmessage =
-        event => {
+    // =========================
+    // WebSocket messages
+    // =========================
 
-            const data =
-                JSON.parse(event.data);
+    state.ws.onmessage = event => {
 
-
-            if (
-                data.type ===
-                "welcome"
-            ) {
-
-                setHeight(
-                    data.player.height
-                );
-
-                createLocalPlayer(
-                    data.player
-                );
-
-                data.players.forEach(
-                    addRemotePlayer
-                );
-
-                login.classList.add(
-                    "hidden"
-                );
-
-                hud.classList.remove(
-                    "hidden"
-                );
-
-                addChatMessage(
-                    "Система",
-                    "Добро пожаловать в GrowWorld!",
-                    true
-                );
-
-                updateOnline();
-            }
+        const data =
+            JSON.parse(event.data);
 
 
-            if (
-                data.type ===
-                "player_joined"
-            ) {
+        // =========================
+        // WELCOME
+        // =========================
 
-                addRemotePlayer(
-                    data.player
-                );
+        if (data.type === "welcome") {
 
-                addChatMessage(
-                    "Система",
-                    `${data.player.name} вошёл в мир`,
-                    true
-                );
-
-                updateOnline();
-            }
+            setHeight(
+                data.player.height
+            );
 
 
-            if (
-                data.type ===
-                "player_left"
-            ) {
-
-                removeRemotePlayer(
-                    data.playerId
-                );
-
-                updateOnline();
-            }
+            createLocalPlayer(
+                data.player
+            );
 
 
-            if (
-                data.type ===
-                "player_moved"
-            ) {
-
-                updateRemotePlayer(
-                    data.player
-                );
-            }
+            data.players.forEach(
+                addRemotePlayer
+            );
 
 
-            if (
-                data.type ===
-                "height_updated"
-            ) {
-
-                setHeight(
-                    data.height
-                );
-            }
+            login.classList.add(
+                "hidden"
+            );
 
 
-            if (
-                data.type ===
-                "player_grew"
-            ) {
-
-                updateRemotePlayer(
-                    data.player
-                );
-            }
+            hud.classList.remove(
+                "hidden"
+            );
 
 
-            if (
-                data.type ===
-                "chat"
-            ) {
+            addChatMessage(
+                "Система",
+                "Добро пожаловать в GrowWorld!",
+                true
+            );
 
-                addChatMessage(
-                    data.name,
-                    data.text
-                );
-            }
-        };
 
+            updateOnline();
+        }
+
+
+        // =========================
+        // PLAYER JOINED
+        // =========================
+
+        if (
+            data.type ===
+            "player_joined"
+        ) {
+
+            addRemotePlayer(
+                data.player
+            );
+
+
+            addChatMessage(
+                "Система",
+                `${data.player.name} вошёл в мир`,
+                true
+            );
+
+
+            updateOnline();
+        }
+
+
+        // =========================
+        // PLAYER LEFT
+        // =========================
+
+        if (
+            data.type ===
+            "player_left"
+        ) {
+
+            removeRemotePlayer(
+                data.playerId
+            );
+
+
+            updateOnline();
+        }
+
+
+        // =========================
+        // PLAYER MOVED
+        // =========================
+
+        if (
+            data.type ===
+            "player_moved"
+        ) {
+
+            updateRemotePlayer(
+                data.player
+            );
+        }
+
+
+        // =========================
+        // HEIGHT UPDATED
+        // =========================
+
+        if (
+            data.type ===
+            "height_updated"
+        ) {
+
+            setHeight(
+                data.height
+            );
+        }
+
+
+        // =========================
+        // PLAYER GREW
+        // =========================
+
+        if (
+            data.type ===
+            "player_grew"
+        ) {
+
+            updateRemotePlayer(
+                data.player
+            );
+        }
+
+
+        // =========================
+        // CHAT
+        // =========================
+
+        if (
+            data.type ===
+            "chat"
+        ) {
+
+            addChatMessage(
+                data.name,
+                data.text
+            );
+        }
+
+    };
+
+
+    // =========================
+    // WebSocket error
+    // =========================
 
     state.ws.onerror = () => {
 
         loginStatus.textContent =
             "Не удалось подключиться к серверу.";
-    };
-}
 
+
+        console.error(
+            "GrowWorld: WebSocket error"
+        );
+
+    };
+
+
+    // =========================
+    // WebSocket closed
+    // =========================
+
+    state.ws.onclose = () => {
+
+        console.log(
+            "GrowWorld: WebSocket закрыт"
+        );
+
+    };
+
+}
 
 // ============================================================
 // CREATE LOCAL PLAYER
@@ -899,7 +991,7 @@ async function createLocalPlayer(p) {
 // REMOTE PLAYER
 // ============================================================
 
-function addRemotePlayer(p) {
+async function addRemotePlayer(p) {
 
     if (
         state.remotePlayers.has(p.id)
@@ -907,10 +999,8 @@ function addRemotePlayer(p) {
         return;
     }
 
-
     const group =
         new THREE.Group();
-
 
     group.position.set(
         Number(p.position.x) || 0,
@@ -918,26 +1008,20 @@ function addRemotePlayer(p) {
         Number(p.position.z) || 0
     );
 
-
     group.rotation.y =
         Number(p.rotation) || 0;
-
 
     group.userData.name =
         p.name || "Player";
 
-
     group.userData.height =
         Number(p.height) || 1;
-
 
     group.userData.targetPosition =
         group.position.clone();
 
-
     group.userData.targetRotation =
         group.rotation.y;
-
 
     state.scene.add(group);
 
@@ -946,21 +1030,32 @@ function addRemotePlayer(p) {
         group
     );
 
+    // -----------------------------
+    // Roblox avatar
+    // -----------------------------
 
-    /*
-        Загружаем модель.
+    const robloxId =
+        Number(p.robloxUserId);
 
-        Она используется всеми игроками,
-        но каждый получает свою копию.
-    */
+    if (
+        Number.isInteger(robloxId) &&
+        robloxId > 0
+    ) {
 
-    loadPlayerModel()
-        .then(() => {
+        try {
 
             const model =
-                clonePlayerModel();
+                await loadRobloxPlayerModel(
+                    robloxId
+                );
 
-            if (!model) return;
+            if (
+                !state.remotePlayers.has(
+                    p.id
+                )
+            ) {
+                return;
+            }
 
             group.userData.model =
                 model;
@@ -971,16 +1066,51 @@ function addRemotePlayer(p) {
                 group,
                 p.height
             );
-        })
-        .catch(error => {
+
+            return;
+
+        } catch (error) {
 
             console.error(
-                "Ошибка модели другого игрока:",
+                "Ошибка Roblox-модели игрока:",
                 error
             );
-        });
-}
+        }
+    }
 
+    // -----------------------------
+    // Fallback player.glb
+    // -----------------------------
+
+    try {
+
+        await loadPlayerModel();
+
+        const model =
+            clonePlayerModel();
+
+        if (!model) {
+            return;
+        }
+
+        group.userData.model =
+            model;
+
+        group.add(model);
+
+        applyPlayerHeight(
+            group,
+            p.height
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Ошибка fallback-модели:",
+            error
+        );
+    }
+}
 
 function updateRemotePlayer(p) {
 
